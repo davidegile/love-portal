@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from threading import Event, Thread
+from threading import Event, Lock, Thread
 from time import monotonic, sleep
 from typing import Any
 
@@ -33,6 +33,8 @@ class VisionService:
         self.detection_hold_seconds = detection_hold_seconds
         self._thread: Thread | None = None
         self._stop_event = Event()
+        self._frame_lock = Lock()
+        self._latest_frame: bytes | None = None
 
     def start(self) -> None:
         if self._thread and self._thread.is_alive():
@@ -45,6 +47,10 @@ class VisionService:
         self._stop_event.set()
         if self._thread and self._thread.is_alive():
             self._thread.join(timeout=2)
+
+    def latest_frame(self) -> bytes | None:
+        with self._frame_lock:
+            return self._latest_frame
 
     def _run(self) -> None:  # pragma: no cover
         if cv2 is None or mp is None:
@@ -93,6 +99,8 @@ class VisionService:
                 result = hands.process(rgb_frame)
                 left_hand, right_hand = self._extract_hands(result)
                 gesture = evaluate_heart_gesture(left_hand, right_hand)
+                annotated = self._annotate_frame(frame, left_hand, right_hand, gesture)
+                self._store_frame(annotated)
                 self.on_status(
                     available=True,
                     message=gesture.reason,
@@ -121,19 +129,75 @@ class VisionService:
         if not result.multi_hand_landmarks or not result.multi_handedness:
             return None, None
 
-        left_hand: dict[str, Landmark] | None = None
-        right_hand: dict[str, Landmark] | None = None
+        hands_found: list[dict[str, Landmark]] = []
 
-        for handedness, landmarks in zip(result.multi_handedness, result.multi_hand_landmarks):
-            label = handedness.classification[0].label.lower()
-            mapped = {
+        for _, landmarks in zip(result.multi_handedness, result.multi_hand_landmarks):
+            mapped: dict[str, Landmark] = {
                 "wrist": Landmark(landmarks.landmark[0].x, landmarks.landmark[0].y),
+                "thumb_ip": Landmark(landmarks.landmark[3].x, landmarks.landmark[3].y),
                 "thumb_tip": Landmark(landmarks.landmark[4].x, landmarks.landmark[4].y),
+                "index_pip": Landmark(landmarks.landmark[6].x, landmarks.landmark[6].y),
                 "index_tip": Landmark(landmarks.landmark[8].x, landmarks.landmark[8].y),
             }
-            if label == "left":
-                left_hand = mapped
-            elif label == "right":
-                right_hand = mapped
+            hands_found.append(mapped)
 
-        return left_hand, right_hand
+        if not hands_found:
+            return None, None
+
+        if len(hands_found) == 1:
+            return hands_found[0], None
+
+        ordered = sorted(hands_found, key=lambda hand: hand["wrist"].x)
+        return ordered[0], ordered[1]
+
+    def _store_frame(self, frame: Any) -> None:
+        if cv2 is None:
+            return
+        ok, encoded = cv2.imencode(".jpg", frame)
+        if not ok:
+            return
+        with self._frame_lock:
+            self._latest_frame = encoded.tobytes()
+
+    def _annotate_frame(
+        self,
+        frame: Any,
+        left_hand: dict[str, Landmark] | None,
+        right_hand: dict[str, Landmark] | None,
+        gesture: Any,
+    ) -> Any:
+        if cv2 is None:
+            return frame
+
+        annotated = frame.copy()
+        frame_height, frame_width = annotated.shape[:2]
+
+        for hand, color in ((left_hand, (255, 120, 180)), (right_hand, (255, 220, 120))):
+            if not hand:
+                continue
+            for point_name in ("wrist", "thumb_ip", "thumb_tip", "index_pip", "index_tip"):
+                if point_name not in hand:
+                    continue
+                point = hand[point_name]
+                center = (int(point.x * frame_width), int(point.y * frame_height))
+                cv2.circle(annotated, center, 8, color, -1)
+
+        cv2.putText(
+            annotated,
+            f"Score: {gesture.score:.3f}",
+            (24, 42),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.9,
+            (255, 255, 255),
+            2,
+        )
+        cv2.putText(
+            annotated,
+            gesture.reason,
+            (24, 78),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.7,
+            (255, 240, 240),
+            2,
+        )
+        return annotated

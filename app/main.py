@@ -4,10 +4,12 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI
+from fastapi import HTTPException
+from fastapi import Request
 from fastapi.responses import HTMLResponse
+from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from fastapi import Request
 from pydantic import BaseModel
 
 from app.state import ExperienceState
@@ -77,3 +79,26 @@ def reset_experience() -> dict[str, str]:
     vision.stop()
     vision.start()
     return {"status": "reset"}
+
+
+def _mjpeg_stream():
+    import time
+
+    while True:
+        frame = vision.latest_frame()
+        if frame is None:
+            time.sleep(0.1)
+            continue
+        yield (
+            b"--frame\r\n"
+            b"Content-Type: image/jpeg\r\n\r\n" + frame + b"\r\n"
+        )
+        time.sleep(0.08)
+
+
+@app.get("/video-feed")
+def video_feed() -> StreamingResponse:
+    return StreamingResponse(
+        _mjpeg_stream(),
+        media_type="multipart/x-mixed-replace; boundary=frame",
+    )
