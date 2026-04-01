@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{{ page_title }}</title>
+    <link rel="stylesheet" href="{{ url_for('static', path='/styles.css') }}" />
+</head>
+<body>
+    <main class="experience-shell">
+        <button id="fullscreen-entry" class="fullscreen-entry">Inizia</button>
+
+        <section id="waiting-panel" class="panel panel-active">
+            <div class="panel-card">
+                <p class="eyebrow">Love Portal</p>
+                <h1>Forma un cuore con le mani</h1>
+                <p id="vision-message" class="lead">
+                    La webcam sta cercando il gesto giusto.
+                </p>
+                <p class="meta">Confidenza rilevamento: <span id="score-value">0.000</span></p>
+            </div>
+        </section>
+
+        <section id="portal-panel" class="panel">
+            <div class="panel-card portal-card">
+                <p class="eyebrow">Il portale si e' aperto</p>
+                <h2>Inserisci il codice</h2>
+                <div id="pin-display" class="pin-display" aria-label="Codice inserito">----</div>
+                <p id="pin-message" class="lead">Inserisci il codice che custodisce la lettera.</p>
+                <div class="keypad" id="keypad">
+                    <button type="button" data-digit="1">1</button>
+                    <button type="button" data-digit="2">2</button>
+                    <button type="button" data-digit="3">3</button>
+                    <button type="button" data-digit="4">4</button>
+                    <button type="button" data-digit="5">5</button>
+                    <button type="button" data-digit="6">6</button>
+                    <button type="button" data-digit="7">7</button>
+                    <button type="button" data-digit="8">8</button>
+                    <button type="button" data-digit="9">9</button>
+                    <button type="button" data-action="clear">C</button>
+                    <button type="button" data-digit="0">0</button>
+                    <button type="button" data-action="submit">OK</button>
+                </div>
+                <p id="hint-box" class="hint"></p>
+            </div>
+        </section>
+
+        <section id="letter-panel" class="panel">
+            <article class="letter-card">
+                <p class="eyebrow">Per te</p>
+                <h2 id="letter-title"></h2>
+                <div id="letter-content" class="letter-content"></div>
+            </article>
+        </section>
+    </main>
+
+    <script src="{{ url_for('static', path='/app.js') }}"></script>
+</body>
+</html>

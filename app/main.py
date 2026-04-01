@@ -1,0 +1,79 @@
+from __future__ import annotations
+
+from contextlib import asynccontextmanager
+from pathlib import Path
+
+from fastapi import FastAPI
+from fastapi.responses import HTMLResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
+from fastapi import Request
+from pydantic import BaseModel
+
+from app.state import ExperienceState
+from app.vision import VisionService
+
+BASE_DIR = Path(__file__).resolve().parent
+
+state = ExperienceState()
+vision = VisionService(
+    on_detected=state.open_portal,
+    on_status=state.update_vision_status,
+)
+
+
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    vision.start()
+    yield
+    vision.stop()
+
+
+app = FastAPI(title="Love Portal", lifespan=lifespan)
+app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
+templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
+
+
+class PinPayload(BaseModel):
+    pin: str
+
+
+@app.get("/", response_class=HTMLResponse)
+def index(request: Request) -> HTMLResponse:
+    return templates.TemplateResponse(
+        request=request,
+        name="index.html",
+        context={"page_title": "Love Portal"},
+    )
+
+
+@app.get("/health")
+def health() -> dict[str, str]:
+    return {"status": "ok"}
+
+
+@app.get("/api/state")
+def get_state() -> dict[str, object]:
+    snapshot = state.snapshot()
+    return snapshot.__dict__
+
+
+@app.post("/api/pin/verify")
+def verify_pin(payload: PinPayload) -> dict[str, object]:
+    ok, message = state.submit_pin(payload.pin)
+    snapshot = state.snapshot()
+    return {
+        "ok": ok,
+        "message": message,
+        "phase": snapshot.phase,
+        "hint": snapshot.hint,
+        "pin_attempts": snapshot.pin_attempts,
+    }
+
+
+@app.post("/api/experience/reset")
+def reset_experience() -> dict[str, str]:
+    state.reset()
+    vision.stop()
+    vision.start()
+    return {"status": "reset"}

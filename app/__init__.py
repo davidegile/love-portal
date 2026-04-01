@@ -1,0 +1,1 @@
+"""Love Portal application package."""
