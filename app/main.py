@@ -7,6 +7,7 @@ from fastapi import FastAPI
 from fastapi import HTTPException
 from fastapi import Request
 from fastapi.responses import HTMLResponse
+from fastapi.responses import Response
 from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -79,6 +80,14 @@ def reset_experience() -> dict[str, str]:
     vision.stop()
     vision.start()
     return {"status": "reset"}
+
+
+@app.get("/video-frame")
+def video_frame() -> Response:
+    frame = vision.latest_frame()
+    if frame is None:
+        raise HTTPException(status_code=503, detail="Video frame not ready.")
+    return Response(content=frame, media_type="image/jpeg")
 
 
 def _mjpeg_stream():

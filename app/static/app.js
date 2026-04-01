@@ -9,9 +9,11 @@ const hintBox = document.getElementById("hint-box");
 const letterTitle = document.getElementById("letter-title");
 const letterContent = document.getElementById("letter-content");
 const fullscreenEntry = document.getElementById("fullscreen-entry");
+const cameraPreview = document.getElementById("camera-preview");
 
 let currentPin = "";
 let currentPhase = "waiting_for_heart";
+let lastCameraSuccessAt = 0;
 
 function setActivePanel(phase) {
     waitingPanel.classList.toggle("panel-active", phase === "waiting_for_heart");
@@ -40,6 +42,21 @@ async function fetchState() {
     letterContent.innerHTML = data.letter_html || "";
     setActivePanel(data.phase);
 }
+
+function refreshCameraPreview() {
+    const now = Date.now();
+    cameraPreview.src = `/video-frame?t=${now}`;
+}
+
+cameraPreview.addEventListener("load", () => {
+    lastCameraSuccessAt = Date.now();
+});
+
+cameraPreview.addEventListener("error", () => {
+    if (Date.now() - lastCameraSuccessAt > 2500) {
+        visionMessage.textContent = "Webcam attiva, ma anteprima non ancora pronta.";
+    }
+});
 
 async function submitPin() {
     if (currentPin.length !== 4) {
@@ -122,4 +139,6 @@ fullscreenEntry.addEventListener("click", async () => {
 
 renderPin();
 fetchState();
+refreshCameraPreview();
 setInterval(fetchState, 1000);
+setInterval(refreshCameraPreview, 180);
