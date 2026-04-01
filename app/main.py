@@ -41,6 +41,11 @@ class PinPayload(BaseModel):
     pin: str
 
 
+class PhrasePayload(BaseModel):
+    transcript: str
+    supported: bool = True
+
+
 @app.get("/", response_class=HTMLResponse)
 def index(request: Request) -> HTMLResponse:
     return templates.TemplateResponse(
@@ -59,6 +64,20 @@ def health() -> dict[str, str]:
 def get_state() -> dict[str, object]:
     snapshot = state.snapshot()
     return snapshot.__dict__
+
+
+@app.post("/api/phrase/heard")
+def phrase_heard(payload: PhrasePayload) -> dict[str, object]:
+    state.update_transcript(payload.transcript, supported=payload.supported)
+    matched = state.hear_phrase(payload.transcript)
+    snapshot = state.snapshot()
+    return {
+        "matched": matched,
+        "phase": snapshot.phase,
+        "status_message": snapshot.status_message,
+        "live_transcript": snapshot.live_transcript,
+        "heard_phrase": snapshot.heard_phrase,
+    }
 
 
 @app.post("/api/pin/verify")

@@ -30,3 +30,12 @@ def test_submit_pin_returns_progressive_hint_on_failure() -> None:
     assert ok is False
     assert "indizio" in message.lower()
     assert state.snapshot().pin_attempts == 1
+
+
+def test_hearing_trigger_phrase_opens_portal() -> None:
+    state = ExperienceState()
+
+    matched = state.hear_phrase("amo dadù")
+
+    assert matched is True
+    assert state.snapshot().phase == "portal_open"

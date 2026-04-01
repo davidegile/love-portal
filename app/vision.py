@@ -2,10 +2,10 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from threading import Event, Lock, Thread
-from time import monotonic, sleep
+from time import sleep
 from typing import Any
 
-from app.gesture import Landmark, evaluate_heart_gesture
+from app.gesture import Landmark
 
 try:
     import cv2  # type: ignore
@@ -72,7 +72,7 @@ class VisionService:
 
         self.on_status(
             available=True,
-            message="Webcam attiva. Cerca di formare un cuore con le mani.",
+            message="Webcam attiva. Di' la frase magica guardando lo schermo.",
             detection_score=0.0,
         )
         hands = mp.solutions.hands.Hands(
@@ -81,8 +81,6 @@ class VisionService:
             min_detection_confidence=0.6,
             min_tracking_confidence=0.5,
         )
-        streak_start: float | None = None
-
         try:
             while not self._stop_event.is_set():
                 ok, frame = capture.read()
@@ -98,24 +96,13 @@ class VisionService:
                 rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                 result = hands.process(rgb_frame)
                 left_hand, right_hand = self._extract_hands(result)
-                gesture = evaluate_heart_gesture(left_hand, right_hand)
-                annotated = self._annotate_frame(frame, left_hand, right_hand, gesture)
+                annotated = self._annotate_frame(frame, left_hand, right_hand)
                 self._store_frame(annotated)
                 self.on_status(
                     available=True,
-                    message=gesture.reason,
-                    detection_score=gesture.score,
+                    message="Webcam attiva. Di' la frase magica: Amo Dadu.",
+                    detection_score=0.0,
                 )
-
-                if gesture.score >= self.detection_threshold:
-                    now = monotonic()
-                    if streak_start is None:
-                        streak_start = now
-                    elif now - streak_start >= self.detection_hold_seconds:
-                        self.on_detected()
-                        return
-                else:
-                    streak_start = None
 
                 sleep(0.05)
         finally:
@@ -164,7 +151,6 @@ class VisionService:
         frame: Any,
         left_hand: dict[str, Landmark] | None,
         right_hand: dict[str, Landmark] | None,
-        gesture: Any,
     ) -> Any:
         if cv2 is None:
             return frame
@@ -184,7 +170,7 @@ class VisionService:
 
         cv2.putText(
             annotated,
-            f"Score: {gesture.score:.3f}",
+            "Di': Amo Dadu",
             (24, 42),
             cv2.FONT_HERSHEY_SIMPLEX,
             0.9,
@@ -193,7 +179,7 @@ class VisionService:
         )
         cv2.putText(
             annotated,
-            gesture.reason,
+            "I sottotitoli compaiono sotto la webcam.",
             (24, 78),
             cv2.FONT_HERSHEY_SIMPLEX,
             0.7,

@@ -1,4 +1,6 @@
-from app.content import PIN_HINTS
+import unicodedata
+
+from app.content import PIN_HINTS, TRIGGER_PHRASE
 
 SECRET_PIN = "2805"
 
@@ -16,3 +18,14 @@ def hint_for_attempt(attempt_count: int) -> str:
         return ""
     hint_index = min(attempt_count - 1, len(PIN_HINTS) - 1)
     return PIN_HINTS[hint_index]
+
+
+def normalize_phrase(text: str) -> str:
+    normalized = unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode("ascii")
+    return " ".join(normalized.lower().strip().split())
+
+
+def verify_trigger_phrase(text: str) -> bool:
+    candidate = normalize_phrase(text)
+    trigger = normalize_phrase(TRIGGER_PHRASE)
+    return trigger in candidate

@@ -18,4 +18,4 @@ def test_state_endpoint_returns_waiting_phase() -> None:
     response = client.get("/api/state")
 
     assert response.status_code == 200
-    assert response.json()["phase"] in {"waiting_for_heart", "portal_open", "letter_unlocked"}
+    assert response.json()["phase"] in {"waiting_for_phrase", "portal_open", "letter_unlocked"}

@@ -1,4 +1,5 @@
 LETTER_TITLE = "Per te"
+TRIGGER_PHRASE = "Amo Dadu"
 
 LETTER_HTML = """
 <p>

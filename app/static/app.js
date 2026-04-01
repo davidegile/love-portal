@@ -10,13 +10,17 @@ const letterTitle = document.getElementById("letter-title");
 const letterContent = document.getElementById("letter-content");
 const fullscreenEntry = document.getElementById("fullscreen-entry");
 const cameraPreview = document.getElementById("camera-preview");
+const liveTranscript = document.getElementById("live-transcript");
+const triggerPhrase = document.getElementById("trigger-phrase");
 
 let currentPin = "";
-let currentPhase = "waiting_for_heart";
+let currentPhase = "waiting_for_phrase";
 let lastCameraSuccessAt = 0;
+let recognition;
+let recognitionActive = false;
 
 function setActivePanel(phase) {
-    waitingPanel.classList.toggle("panel-active", phase === "waiting_for_heart");
+    waitingPanel.classList.toggle("panel-active", phase === "waiting_for_phrase");
     portalPanel.classList.toggle("panel-active", phase === "portal_open");
     letterPanel.classList.toggle("panel-active", phase === "letter_unlocked");
     currentPhase = phase;
@@ -35,12 +39,17 @@ async function fetchState() {
 
     const data = await response.json();
     visionMessage.textContent = data.vision_message || data.status_message;
-    scoreValue.textContent = Number(data.last_detection_score || 0).toFixed(3);
     hintBox.textContent = data.hint || "";
     pinMessage.textContent = data.status_message || "";
     letterTitle.textContent = data.letter_title || "Per te";
     letterContent.innerHTML = data.letter_html || "";
+    liveTranscript.textContent = data.live_transcript || "In ascolto...";
+    triggerPhrase.textContent = data.trigger_phrase || "Amo Dadù";
     setActivePanel(data.phase);
+
+    if (data.speech_supported === false) {
+        liveTranscript.textContent = "Riconoscimento vocale non supportato in questo ambiente.";
+    }
 }
 
 function refreshCameraPreview() {
@@ -57,6 +66,69 @@ cameraPreview.addEventListener("error", () => {
         visionMessage.textContent = "Webcam attiva, ma anteprima non ancora pronta.";
     }
 });
+
+async function submitTranscript(transcript, supported = true) {
+    const response = await fetch("/api/phrase/heard", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ transcript, supported }),
+    });
+    if (!response.ok) {
+        return;
+    }
+    const data = await response.json();
+    liveTranscript.textContent = data.live_transcript || "In ascolto...";
+    visionMessage.textContent = data.status_message || visionMessage.textContent;
+    if (data.matched) {
+        await fetchState();
+    }
+}
+
+function setupSpeechRecognition() {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+        submitTranscript("Riconoscimento vocale non disponibile.", false);
+        return;
+    }
+
+    recognition = new SpeechRecognition();
+    recognition.lang = "it-IT";
+    recognition.continuous = true;
+    recognition.interimResults = true;
+
+    recognition.onresult = async (event) => {
+        let transcript = "";
+        for (let index = event.resultIndex; index < event.results.length; index += 1) {
+            transcript += event.results[index][0].transcript;
+        }
+
+        transcript = transcript.trim();
+        if (!transcript) {
+            return;
+        }
+
+        liveTranscript.textContent = transcript;
+        await submitTranscript(transcript, true);
+    };
+
+    recognition.onerror = () => {
+        visionMessage.textContent = "Microfono non disponibile o permesso negato.";
+    };
+
+    recognition.onend = () => {
+        if (recognitionActive && currentPhase === "waiting_for_phrase") {
+            recognition.start();
+        }
+    };
+}
+
+function startSpeechRecognition() {
+    if (!recognition || recognitionActive) {
+        return;
+    }
+    recognitionActive = true;
+    recognition.start();
+}
 
 async function submitPin() {
     if (currentPin.length !== 4) {
@@ -135,8 +207,10 @@ fullscreenEntry.addEventListener("click", async () => {
         }
     }
     fullscreenEntry.style.display = "none";
+    startSpeechRecognition();
 });
 
+setupSpeechRecognition();
 renderPin();
 fetchState();
 refreshCameraPreview();
